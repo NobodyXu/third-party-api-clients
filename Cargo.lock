@@ -785,6 +785,10 @@ dependencies = [
 [[package]]
 name = "http-next-link"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "itertools",
+]
 
 [[package]]
 name = "httparse"
@@ -1188,7 +1192,6 @@ dependencies = [
  "dirs",
  "http",
  "hyperx",
- "itertools",
  "jsonwebtoken",
  "log",
  "mime",

@@ -79,6 +79,7 @@ impl From<MediaType> for mime::Mime {
 
 use std::{fmt, str::FromStr};
 
+use itertools::Itertools;
 use serde::de::{self, Visitor};
 
 pub fn next_link(l: &hyperx::header::Link) -> Option<String> {
@@ -95,7 +96,6 @@ pub fn next_link(l: &hyperx::header::Link) -> Option<String> {
         })
     })
 }
-
 pub mod date_format {
     use chrono::NaiveDate;
     use serde::{self, Deserialize, Deserializer};
