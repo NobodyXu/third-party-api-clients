@@ -485,10 +485,7 @@ impl Client {
         req = req.header(http::header::USER_AGENT, &*instance.agent);
         req = req.header(
             http::header::ACCEPT,
-            &*format!(
-                "{}",
-                hyperx::header::qitem::<mime::Mime>(From::from(media_type))
-            ),
+            &*format!("{}", mime::Mime::from(media_type)),
         );
 
         if let Some(auth_str) = auth {
