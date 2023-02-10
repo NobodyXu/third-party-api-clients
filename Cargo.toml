@@ -21,5 +21,6 @@ members = [
 	"slack",
 	"stripe",
 	"tripactions",
-	"zoom"
+	"zoom",
+    "http-next-link",
 ]
