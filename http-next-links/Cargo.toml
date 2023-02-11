@@ -1,0 +1,12 @@
+[package]
+name = "http-next-links"
+version = "0.1.0"
+edition = "2018"
+description = "Parsing http header Link with rels=Next."
+documentation = "https://docs.rs/http-next-links/"
+repository = "https://github.com/oxidecomputer/third-party-api-clients/tree/main/http-next-links"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+itertools = "0.10"

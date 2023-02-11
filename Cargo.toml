@@ -22,5 +22,5 @@ members = [
 	"stripe",
 	"tripactions",
 	"zoom",
-    "http-next-link",
+    "http-next-links",
 ]
