@@ -96,6 +96,11 @@ impl FromStr for NextLinks {
         let next_links: Vec<_> = segments
             .tuples()
             .filter_map(|(x, y)| {
+                // Expected tuples like (Segment::LinkValue(_), Segment::ParamRels { .. })
+                // Having (Segment::LinkValue(_), Segment::LinkValue(_)) would cause it to panic
+                // since that should not happen.
+                // Anything else would cause this clousre to return an `Some(Err(_))`.
+
                 (|| -> Result<Option<String>, anyhow::Error> {
                     let Segment::LinkValue(link_value) = x? else {
                         return Err(error("Expected Target IRI but found parameter rel"))
