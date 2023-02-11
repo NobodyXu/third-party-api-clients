@@ -23,9 +23,10 @@ impl FromStr for NextLink {
     fn from_str(s: &str) -> anyhow::Result<Self> {
         enum Segment<'a> {
             LinkValue(&'a str),
-            ParamRels(&'a str),
+            ParamRels { is_next: bool },
         }
 
+        // Parse the segments
         let mut segments = s
             .trim()
             .split(&[';', ','])
@@ -47,7 +48,22 @@ impl FromStr for NextLink {
                         if value.is_empty() {
                             bail("Found paramter relations but its value is empty")
                         } else {
-                            Some(Ok(Segment::ParamRels(value)))
+                            let rels = if let Some(rels) = value
+                                .strip_prefix('"')
+                                .and_then(|rels| rels.strip_suffix('"'))
+                            {
+                                rels.trim()
+                            } else if value.starts_with('"') || value.ends_with('"') {
+                                return bail("Unclosed \" in parameters rel");
+                            } else {
+                                value
+                            };
+
+                            Some(Ok(Segment::ParamRels {
+                                is_next: rels
+                                    .split(' ')
+                                    .any(|rel| "next".eq_ignore_ascii_case(rel)),
+                            }))
                         }
                     } else {
                         None
@@ -59,7 +75,8 @@ impl FromStr for NextLink {
             .coalesce(|x, y| {
                 // Relation can only occur once and the parser is required to ignore
                 // all but the first one.
-                if matches!(x, Ok(Segment::ParamRels(_))) && matches!(y, Ok(Segment::ParamRels(_)))
+                if matches!(x, Ok(Segment::ParamRels { .. }))
+                    && matches!(y, Ok(Segment::ParamRels { .. }))
                 {
                     Ok(x)
                 } else {
@@ -68,8 +85,7 @@ impl FromStr for NextLink {
             })
             .peekable();
 
-        // Loop over the splits parsing the Link header into
-        // a `Vec<LinkValue>`
+        // Find link_value with params rel=next
         while let Some(res) = segments.next() {
             let segment = res?;
 
@@ -77,23 +93,11 @@ impl FromStr for NextLink {
                 return Err(error("Expected Target IRI but found parameters"));
             };
 
-            if let Some(res) = segments.next_if(|res| matches!(res, Ok(Segment::ParamRels(_)))) {
-                let Segment::ParamRels(rels) = res.unwrap() else {
+            if let Some(res) = segments.next_if(|res| matches!(res, Ok(Segment::ParamRels { .. })))
+            {
+                let Segment::ParamRels{ is_next} = res.unwrap() else {
                     unreachable!("BUG: res can only be Ok(Segment::ParamRels(_))")
                 };
-
-                let rels = if let Some(stripped_rels) = rels
-                    .strip_prefix('"')
-                    .and_then(|rels| rels.strip_suffix('"'))
-                {
-                    stripped_rels.trim()
-                } else if rels.starts_with('"') || rels.ends_with('"') {
-                    return Err(error("Unclosed \" in relation parameters"));
-                } else {
-                    rels
-                };
-
-                let is_next = rels.split(' ').any(|rel| "next".eq_ignore_ascii_case(rel));
 
                 if is_next {
                     // Propagate errors
