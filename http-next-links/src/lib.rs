@@ -93,21 +93,23 @@ impl FromStr for NextLinks {
             });
 
         // Find link values with params rel=next
-        let next_links: Vec<_> = segments.chunks(2).into_iter().filter_map(|mut chunk| {
-            let link_value = match chunk.next()? {
-                Ok(Segment::LinkValue(link_value)) => link_value,
-                Ok(Segment::ParamRels {..}) => return Some(Err(error("Expected Target IRI but found parameter rel"))),
-                Err(err) => return Some(Err(err)),
-            };
+        let next_links: Vec<_> = segments
+            .tuples()
+            .filter_map(|(x, y)| {
+                (|| -> Result<Option<String>, anyhow::Error> {
+                    let Segment::LinkValue(link_value) = x? else {
+                        return Err(error("Expected Target IRI but found parameter rel"))
+                    };
 
-            let is_next = match chunk.next()? {
-                Ok(Segment::LinkValue(..)) => unreachable!("This should not happen since coalesce should remove all link_value without param rel except for the last one"),
-                Ok(Segment::ParamRels { is_next }) => is_next,
-                Err(err) => return Some(Err(err)),
-            };
+                    let Segment::ParamRels { is_next } = y? else {
+                        unreachable!("segments.tuples() should only contain link_value with param rel")
+                    };
 
-            is_next.then(|| Ok(link_value.to_string()))
-        }).try_collect()?;
+                    Ok(is_next.then(|| link_value.to_string()))
+                })()
+                .transpose()
+            })
+            .try_collect()?;
 
         Ok(Self(next_links.into_iter()))
     }
