@@ -13,6 +13,10 @@ impl Iterator for NextLink {
     }
 }
 
+fn error(msg: &str) -> anyhow::Error {
+    anyhow::anyhow!("Invalid link segment: {}", msg)
+}
+
 impl FromStr for NextLink {
     type Err = anyhow::Error;
 
@@ -27,12 +31,12 @@ impl FromStr for NextLink {
             .split(&[';', ','])
             .map(str::trim)
             .filter_map(|segment| {
-                let bail = |msg| Some(Err(anyhow::anyhow!("Invalid link segment: {}", msg)));
+                let bail = |msg| Some(Err(error(msg)));
 
                 if let Some(segment) = segment.strip_prefix('<').and_then(|s| s.strip_suffix('>')) {
                     Some(Ok(Segment::LinkValue(segment.trim())))
                 } else if segment.starts_with('<') || segment.ends_with('>') {
-                    bail("Found incomplete Target IRI")
+                    bail("Found incomplete Target IRI with unclosed '<' and '>'")
                 } else if let Some((name, value)) = segment.split_once('=') {
                     // Parse relation type: `rel`.
                     // https://tools.ietf.org/html/rfc5988#section-5.3
@@ -64,15 +68,13 @@ impl FromStr for NextLink {
             })
             .peekable();
 
-        let bail = |msg| anyhow::bail!("Invalid link segment: {}", msg);
-
         // Loop over the splits parsing the Link header into
         // a `Vec<LinkValue>`
         while let Some(res) = segments.next() {
             let segment = res?;
 
             let Segment::LinkValue(link_value) = segment else {
-                return bail("Expected Target IRI but found parameters");
+                return Err(error("Expected Target IRI but found parameters"));
             };
 
             if let Some(res) = segments.next_if(|res| matches!(res, Ok(Segment::ParamRels(_)))) {
@@ -86,7 +88,7 @@ impl FromStr for NextLink {
                 {
                     stripped_rels.trim()
                 } else if rels.starts_with('"') || rels.ends_with('"') {
-                    return bail("Unclose \" in relation parameters");
+                    return Err(error("Unclosed \" in relation parameters"));
                 } else {
                     rels
                 };
