@@ -1,15 +1,15 @@
-use std::str::FromStr;
+use std::{str::FromStr, vec::IntoIter as VecIntoIter};
 
 use itertools::Itertools;
 
 #[derive(Debug)]
-pub struct NextLink(Option<String>);
+pub struct NextLinks(VecIntoIter<String>);
 
-impl Iterator for NextLink {
+impl Iterator for NextLinks {
     type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.take()
+        self.0.next()
     }
 }
 
@@ -22,7 +22,7 @@ fn strip_quotation(s: &str, quotation: (char, char)) -> Option<&str> {
         .and_then(|s| s.strip_suffix(quotation.1))
 }
 
-impl FromStr for NextLink {
+impl FromStr for NextLinks {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> anyhow::Result<Self> {
@@ -32,7 +32,7 @@ impl FromStr for NextLink {
         }
 
         // Parse the segments
-        let mut segments = s
+        let segments = s
             .trim()
             .split(&[';', ','])
             .map(str::trim)
@@ -51,7 +51,7 @@ impl FromStr for NextLink {
                         let value = value.trim();
 
                         if value.is_empty() {
-                            bail("Found paramter relations but its value is empty")
+                            bail("Found paramter rels but its value is empty")
                         } else {
                             let rels = if let Some(rels) = strip_quotation(value, ('"', '"')) {
                                 rels.trim()
@@ -75,44 +75,41 @@ impl FromStr for NextLink {
                 }
             })
             .coalesce(|x, y| {
-                // Relation can only occur once and the parser is required to ignore
-                // all but the first one.
-                if matches!(x, Ok(Segment::ParamRels { .. }))
-                    && matches!(y, Ok(Segment::ParamRels { .. }))
-                {
+                let is_param_rels =
+                    |val: &Result<_, _>| matches!(val, Ok(Segment::ParamRels { .. }));
+                let is_link_value = |val: &Result<_, _>| matches!(val, Ok(Segment::LinkValue(_)));
+
+                if is_param_rels(&x) && is_param_rels(&y) {
+                    // Params rel can only occur once and the parser is required to ignore
+                    // all but the first one.
                     Ok(x)
+                } else if is_link_value(&x) && is_link_value(&y) {
+                    // Filter out link_value that does not have a rel parameter,
+                    // except for the last one.
+                    Ok(y)
                 } else {
                     Err((x, y))
                 }
-            })
-            .peekable();
+            });
 
-        // Find link_value with params rel=next
-        while let Some(res) = segments.next() {
-            let segment = res?;
-
-            let Segment::LinkValue(link_value) = segment else {
-                return Err(error("Expected Target IRI but found parameters"));
+        // Find link values with params rel=next
+        let next_links: Vec<_> = segments.chunks(2).into_iter().filter_map(|mut chunk| {
+            let link_value = match chunk.next()? {
+                Ok(Segment::LinkValue(link_value)) => link_value,
+                Ok(Segment::ParamRels {..}) => return Some(Err(error("Expected Target IRI but found parameter rel"))),
+                Err(err) => return Some(Err(err)),
             };
 
-            if let Some(res) = segments.next_if(|res| matches!(res, Ok(Segment::ParamRels { .. })))
-            {
-                let Segment::ParamRels{ is_next } = res.unwrap() else {
-                    unreachable!("BUG: res can only be Ok(Segment::ParamRels(_))")
-                };
+            let is_next = match chunk.next()? {
+                Ok(Segment::LinkValue(..)) => unreachable!("This should not happen since coalesce should remove all link_value without param rel except for the last one"),
+                Ok(Segment::ParamRels { is_next }) => is_next,
+                Err(err) => return Some(Err(err)),
+            };
 
-                if is_next {
-                    // Propagate errors
-                    if let Some(err) = segments.find_map(Result::err) {
-                        return Err(err);
-                    } else {
-                        return Ok(Self(Some(link_value.to_string())));
-                    }
-                }
-            }
-        }
+            is_next.then(|| Ok(link_value.to_string()))
+        }).try_collect()?;
 
-        Ok(Self(None))
+        Ok(Self(next_links.into_iter()))
     }
 }
 
