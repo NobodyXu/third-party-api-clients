@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use itertools::Itertools;
 
+#[derive(Debug)]
 pub struct NextLink(Option<String>);
 
 impl Iterator for NextLink {
