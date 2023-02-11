@@ -17,6 +17,11 @@ fn error(msg: &str) -> anyhow::Error {
     anyhow::anyhow!("Invalid link segment: {}", msg)
 }
 
+fn strip_quotation(s: &str, quotation: (char, char)) -> Option<&str> {
+    s.strip_prefix(quotation.0)
+        .and_then(|s| s.strip_suffix(quotation.1))
+}
+
 impl FromStr for NextLink {
     type Err = anyhow::Error;
 
@@ -34,7 +39,7 @@ impl FromStr for NextLink {
             .filter_map(|segment| {
                 let bail = |msg| Some(Err(error(msg)));
 
-                if let Some(segment) = segment.strip_prefix('<').and_then(|s| s.strip_suffix('>')) {
+                if let Some(segment) = strip_quotation(segment, ('<', '>')) {
                     Some(Ok(Segment::LinkValue(segment.trim())))
                 } else if segment.starts_with('<') || segment.ends_with('>') {
                     bail("Found incomplete Target IRI with unclosed '<' and '>'")
@@ -48,10 +53,7 @@ impl FromStr for NextLink {
                         if value.is_empty() {
                             bail("Found paramter relations but its value is empty")
                         } else {
-                            let rels = if let Some(rels) = value
-                                .strip_prefix('"')
-                                .and_then(|rels| rels.strip_suffix('"'))
-                            {
+                            let rels = if let Some(rels) = strip_quotation(value, ('"', '"')) {
                                 rels.trim()
                             } else if value.starts_with('"') || value.ends_with('"') {
                                 return bail("Unclosed \" in parameters rel");
@@ -95,7 +97,7 @@ impl FromStr for NextLink {
 
             if let Some(res) = segments.next_if(|res| matches!(res, Ok(Segment::ParamRels { .. })))
             {
-                let Segment::ParamRels{ is_next} = res.unwrap() else {
+                let Segment::ParamRels{ is_next } = res.unwrap() else {
                     unreachable!("BUG: res can only be Ok(Segment::ParamRels(_))")
                 };
 
