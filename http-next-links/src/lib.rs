@@ -17,9 +17,15 @@ fn error(msg: &str) -> anyhow::Error {
     anyhow::anyhow!("Invalid link segment: {}", msg)
 }
 
-fn strip_quotation(s: &str, quotation: (char, char)) -> Option<&str> {
-    s.strip_prefix(quotation.0)
-        .and_then(|s| s.strip_suffix(quotation.1))
+trait StrExt {
+    fn strip_quotation(&self, quotation: (char, char)) -> Option<&Self>;
+}
+
+impl StrExt for str {
+    fn strip_quotation(&self, quotation: (char, char)) -> Option<&Self> {
+        self.strip_prefix(quotation.0)
+            .and_then(|s| s.strip_suffix(quotation.1))
+    }
 }
 
 impl FromStr for NextLinks {
@@ -39,7 +45,7 @@ impl FromStr for NextLinks {
             .filter_map(|segment| {
                 let bail = |msg| Some(Err(error(msg)));
 
-                if let Some(segment) = strip_quotation(segment, ('<', '>')) {
+                if let Some(segment) = segment.strip_quotation(('<', '>')) {
                     Some(Ok(Segment::LinkValue(segment.trim())))
                 } else if segment.starts_with('<') || segment.ends_with('>') {
                     bail("Found incomplete Target IRI with unclosed '<' and '>'")
@@ -53,7 +59,7 @@ impl FromStr for NextLinks {
                         if value.is_empty() {
                             bail("Found paramter rels but its value is empty")
                         } else {
-                            let rels = if let Some(rels) = strip_quotation(value, ('"', '"')) {
+                            let rels = if let Some(rels) = value.strip_quotation(('"', '"')) {
                                 rels.trim()
                             } else if value.starts_with('"') || value.ends_with('"') {
                                 return bail("Unclosed \" in parameters rel");
