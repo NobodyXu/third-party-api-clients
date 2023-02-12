@@ -1,4 +1,7 @@
-use std::{str::FromStr, vec::IntoIter as VecIntoIter};
+use std::{
+    str::{FromStr, Split},
+    vec::IntoIter as VecIntoIter,
+};
 
 use itertools::Itertools;
 
@@ -18,13 +21,27 @@ fn error(msg: &str) -> anyhow::Error {
 }
 
 trait StrExt {
+    const HTTP_WHITESPACE: [char; 2] = [' ', '\t'];
+
     fn strip_quotation(&self, quotation: (char, char)) -> Option<&Self>;
+
+    fn trim_http_whitespaces(&self) -> &Self;
+
+    fn split_http_whitespaces(&self) -> Split<'_, [char; 2]>;
 }
 
 impl StrExt for str {
     fn strip_quotation(&self, quotation: (char, char)) -> Option<&Self> {
         self.strip_prefix(quotation.0)
             .and_then(|s| s.strip_suffix(quotation.1))
+    }
+
+    fn trim_http_whitespaces(&self) -> &Self {
+        self.trim_matches(&Self::HTTP_WHITESPACE[..])
+    }
+
+    fn split_http_whitespaces(&self) -> Split<'_, [char; 2]> {
+        self.split(Self::HTTP_WHITESPACE)
     }
 }
 
@@ -39,28 +56,28 @@ impl FromStr for NextLinks {
 
         // Parse the segments
         let segments = s
-            .trim()
+            .trim_http_whitespaces()
             .split(&[';', ','])
-            .map(str::trim)
+            .map(str::trim_http_whitespaces)
             .filter_map(|segment| {
                 let bail = |msg| Some(Err(error(msg)));
 
                 if let Some(segment) = segment.strip_quotation(('<', '>')) {
-                    Some(Ok(Segment::LinkValue(segment.trim())))
+                    Some(Ok(Segment::LinkValue(segment.trim_http_whitespaces())))
                 } else if segment.starts_with('<') || segment.ends_with('>') {
                     bail("Found incomplete Target IRI with unclosed '<' and '>'")
                 } else if let Some((name, value)) = segment.split_once('=') {
                     // Parse relation type: `rel`.
                     // https://tools.ietf.org/html/rfc5988#section-5.3
 
-                    if "rel".eq_ignore_ascii_case(name.trim()) {
-                        let value = value.trim();
+                    if "rel".eq_ignore_ascii_case(name.trim_http_whitespaces()) {
+                        let value = value.trim_http_whitespaces();
 
                         if value.is_empty() {
                             bail("Found paramter rels but its value is empty")
                         } else {
                             let rels = if let Some(rels) = value.strip_quotation(('"', '"')) {
-                                rels.trim()
+                                rels.trim_http_whitespaces()
                             } else if value.starts_with('"') || value.ends_with('"') {
                                 return bail("Unclosed \" in parameters rel");
                             } else {
@@ -69,7 +86,7 @@ impl FromStr for NextLinks {
 
                             Some(Ok(Segment::ParamRels {
                                 is_next: rels
-                                    .split(' ')
+                                    .split_http_whitespaces()
                                     .any(|rel| "next".eq_ignore_ascii_case(rel)),
                             }))
                         }
