@@ -1,20 +1,10 @@
 use std::{
+    iter,
     str::{FromStr, Split},
     vec::IntoIter as VecIntoIter,
 };
 
 use itertools::Itertools;
-
-#[derive(Debug)]
-pub struct NextLinks(VecIntoIter<String>);
-
-impl Iterator for NextLinks {
-    type Item = String;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.next()
-    }
-}
 
 fn error(msg: &str) -> anyhow::Error {
     anyhow::anyhow!("Invalid link segment: {}", msg)
@@ -55,99 +45,146 @@ impl StrExt for str {
     }
 }
 
+enum ParamsIter<'a> {
+    Params(&'a str),
+    NextUri(&'a str),
+}
+
+impl<'a> ParamsIter<'a> {
+    fn new(rest: &'a str) -> anyhow::Result<Self> {
+        Self::new_without_trim(rest.trim_start_http_whitespaces())
+    }
+
+    fn new_without_trim(rest: &'a str) -> anyhow::Result<Self> {
+        if let Some(params) = rest.strip_prefix(';') {
+            Ok(ParamsIter::Params(params.trim_start_http_whitespaces()))
+        } else if let Some(next_uri) = rest.strip_prefix(',') {
+            Ok(ParamsIter::NextUri(next_uri.trim_start_http_whitespaces()))
+        } else if rest.is_empty() {
+            Ok(ParamsIter::NextUri(rest))
+        } else {
+            Err(error(
+                "Expected either ';' for next param, ',' for next uri or an empty string for termination",
+            ))
+        }
+    }
+
+    /// Only call this when `<Self as Iterator>::next` returns `None`.
+    fn into_next_uri(self) -> Option<&'a str> {
+        if let ParamsIter::NextUri(next_uri) = self {
+            Some(next_uri)
+        } else {
+            None
+        }
+    }
+}
+
+impl iter::FusedIterator for ParamsIter<'_> {}
+
+impl<'a> Iterator for ParamsIter<'a> {
+    type Item = anyhow::Result<(&'a str, &'a str)>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let ParamsIter::Params(params) = *self else { return None };
+
+        let mut f = || -> anyhow::Result<_> {
+            let (name, rest) = params
+                .split_once('=')
+                .ok_or_else(|| error("Expected param"))?;
+
+            let name = name.trim_end_http_whitespaces();
+
+            let rest = rest.trim_start_http_whitespaces();
+            let value = if let Some(rest) = rest.strip_prefix('"') {
+                // Parse quoted value
+                let (value, rest) = rest
+                    .split_once('"')
+                    .ok_or_else(|| error("Unclosed '\"' in param value"))?;
+
+                *self = Self::new(rest)?;
+
+                value
+            } else if let Some(delimiter_index) = rest.find([',', ';']) {
+                // Find next delimiter
+
+                // We know that at index delimiter_index there must be either
+                // ',' or ';', so we use unwrap `str::get` and then call
+                // new_without_trim here.
+                *self = ParamsIter::new_without_trim(rest.get(delimiter_index..).unwrap())?;
+
+                rest.get(..delimiter_index).unwrap()
+            } else {
+                // There is no delimiter left, everything left is part of
+                // the value
+
+                *self = ParamsIter::NextUri("");
+
+                rest
+            };
+
+            Ok((name, value))
+        };
+
+        Some(f())
+    }
+}
+
+/// Return (uri, params iterator).
+///
+/// Precondition: `s` must not be empty.
+fn parse_uri(s: &str) -> anyhow::Result<(&str, ParamsIter<'_>)> {
+    let s = s
+        .trim_start_http_whitespaces()
+        .strip_prefix('<')
+        .ok_or_else(|| error("Expected '<' for uri"))?;
+
+    let (uri, rest) = s
+        .split_once('>')
+        .ok_or_else(|| error("Expected '>' for uri"))?;
+
+    Ok((uri, ParamsIter::new(rest)?))
+}
+
+#[derive(Debug)]
+pub struct NextLinks(VecIntoIter<String>);
+
+impl Iterator for NextLinks {
+    type Item = String;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+}
+
 impl FromStr for NextLinks {
     type Err = anyhow::Error;
 
-    fn from_str(s: &str) -> anyhow::Result<Self> {
-        enum Segment<'a> {
-            LinkValue(&'a str),
-            ParamRels { is_next: bool },
+    fn from_str(mut s: &str) -> anyhow::Result<Self> {
+        let mut next_links = Vec::new();
+
+        while !s.is_empty() {
+            let (uri, mut params) = parse_uri(s)?;
+
+            let mut rels = None;
+
+            while let Some((name, value)) = params.next().transpose()? {
+                // Params rel can only occur once and the parser is required to ignore
+                // all but the first one.
+                if "rel".eq_ignore_ascii_case(name) && rels.is_none() {
+                    rels = Some(value);
+                }
+            }
+
+            let is_next = rels
+                .map(|rels| rels.split(' ').any(|rel| "next".eq_ignore_ascii_case(rel)))
+                .unwrap_or(false);
+
+            if is_next {
+                next_links.push(uri.to_string());
+            }
+
+            s = params.into_next_uri().unwrap();
         }
-
-        // Parse the segments
-        let segments = s
-            .trim_http_whitespaces()
-            .split(&[';', ','])
-            .map(str::trim_http_whitespaces)
-            .filter_map(|segment| {
-                let bail = |msg| Some(Err(error(msg)));
-
-                if let Some(segment) = segment.strip_quotation(('<', '>')) {
-                    Some(Ok(Segment::LinkValue(segment.trim_http_whitespaces())))
-                } else if segment.starts_with('<') || segment.ends_with('>') {
-                    bail("Found incomplete Target IRI with unclosed '<' and '>'")
-                } else if let Some((name, value)) = segment.split_once('=') {
-                    // Parse relation type: `rel`.
-                    // https://tools.ietf.org/html/rfc5988#section-5.3
-
-                    if "rel".eq_ignore_ascii_case(name.trim_http_whitespaces()) {
-                        let value = value.trim_http_whitespaces();
-
-                        if value.is_empty() {
-                            bail("Found paramter rels but its value is empty")
-                        } else {
-                            let rels = if let Some(rels) = value.strip_quotation(('"', '"')) {
-                                rels.trim_http_whitespaces()
-                            } else if value.starts_with('"') || value.ends_with('"') {
-                                return bail("Unclosed \" in parameters rel");
-                            } else {
-                                value
-                            };
-
-                            Some(Ok(Segment::ParamRels {
-                                is_next: rels
-                                    .split_http_whitespaces()
-                                    .any(|rel| "next".eq_ignore_ascii_case(rel)),
-                            }))
-                        }
-                    } else {
-                        None
-                    }
-                } else {
-                    bail("Neither Target IRI nor parameters")
-                }
-            })
-            .coalesce(|x, y| {
-                let is_param_rels =
-                    |val: &Result<_, _>| matches!(val, Ok(Segment::ParamRels { .. }));
-                let is_link_value = |val: &Result<_, _>| matches!(val, Ok(Segment::LinkValue(_)));
-
-                if is_param_rels(&x) && is_param_rels(&y) {
-                    // Params rel can only occur once and the parser is required to ignore
-                    // all but the first one.
-                    Ok(x)
-                } else if is_link_value(&x) && is_link_value(&y) {
-                    // Filter out link_value that does not have a rel parameter,
-                    // except for the last one.
-                    Ok(y)
-                } else {
-                    Err((x, y))
-                }
-            });
-
-        // Find link values with params rel=next
-        let next_links: Vec<_> = segments
-            .tuples()
-            .filter_map(|(x, y)| {
-                // Expected tuples like (Segment::LinkValue(_), Segment::ParamRels { .. })
-                // Having (Segment::LinkValue(_), Segment::LinkValue(_)) would cause it to panic
-                // since that should not happen.
-                // Anything else would cause this clousre to return an `Some(Err(_))`.
-
-                (|| -> Result<Option<String>, anyhow::Error> {
-                    let Segment::LinkValue(link_value) = x? else {
-                        return Err(error("Expected Target IRI but found parameter rel"))
-                    };
-
-                    let Segment::ParamRels { is_next } = y? else {
-                        unreachable!("segments.tuples() should only contain link_value with param rel")
-                    };
-
-                    Ok(is_next.then(|| link_value.to_string()))
-                })()
-                .transpose()
-            })
-            .try_collect()?;
 
         Ok(Self(next_links.into_iter()))
     }
