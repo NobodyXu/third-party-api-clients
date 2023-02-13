@@ -27,6 +27,9 @@ trait StrExt {
 
     fn trim_http_whitespaces(&self) -> &Self;
 
+    fn trim_start_http_whitespaces(&self) -> &Self;
+    fn trim_end_http_whitespaces(&self) -> &Self;
+
     fn split_http_whitespaces(&self) -> Split<'_, [char; 2]>;
 }
 
@@ -38,6 +41,13 @@ impl StrExt for str {
 
     fn trim_http_whitespaces(&self) -> &Self {
         self.trim_matches(&Self::HTTP_WHITESPACE[..])
+    }
+
+    fn trim_start_http_whitespaces(&self) -> &Self {
+        self.trim_start_matches(&Self::HTTP_WHITESPACE[..])
+    }
+    fn trim_end_http_whitespaces(&self) -> &Self {
+        self.trim_end_matches(&Self::HTTP_WHITESPACE[..])
     }
 
     fn split_http_whitespaces(&self) -> Split<'_, [char; 2]> {
