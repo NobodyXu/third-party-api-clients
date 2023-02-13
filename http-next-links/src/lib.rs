@@ -4,8 +4,6 @@ use std::{
     vec::IntoIter as VecIntoIter,
 };
 
-use itertools::Itertools;
-
 fn error(msg: &str) -> anyhow::Error {
     anyhow::anyhow!("Invalid link segment: {}", msg)
 }

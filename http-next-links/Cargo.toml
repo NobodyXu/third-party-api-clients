@@ -9,4 +9,3 @@ license = "MIT"
 
 [dependencies]
 anyhow = "1"
-itertools = "0.10"
