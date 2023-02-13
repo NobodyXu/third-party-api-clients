@@ -1,8 +1,4 @@
-use std::{
-    iter,
-    str::{FromStr, Split},
-    vec::IntoIter as VecIntoIter,
-};
+use std::{iter, str::FromStr, vec::IntoIter as VecIntoIter};
 
 fn error(msg: &str) -> anyhow::Error {
     anyhow::anyhow!("Invalid link segment: {}", msg)
@@ -11,35 +7,16 @@ fn error(msg: &str) -> anyhow::Error {
 trait StrExt {
     const HTTP_WHITESPACE: [char; 2] = [' ', '\t'];
 
-    fn strip_quotation(&self, quotation: (char, char)) -> Option<&Self>;
-
-    fn trim_http_whitespaces(&self) -> &Self;
-
     fn trim_start_http_whitespaces(&self) -> &Self;
     fn trim_end_http_whitespaces(&self) -> &Self;
-
-    fn split_http_whitespaces(&self) -> Split<'_, [char; 2]>;
 }
 
 impl StrExt for str {
-    fn strip_quotation(&self, quotation: (char, char)) -> Option<&Self> {
-        self.strip_prefix(quotation.0)
-            .and_then(|s| s.strip_suffix(quotation.1))
-    }
-
-    fn trim_http_whitespaces(&self) -> &Self {
-        self.trim_matches(&Self::HTTP_WHITESPACE[..])
-    }
-
     fn trim_start_http_whitespaces(&self) -> &Self {
         self.trim_start_matches(&Self::HTTP_WHITESPACE[..])
     }
     fn trim_end_http_whitespaces(&self) -> &Self {
         self.trim_end_matches(&Self::HTTP_WHITESPACE[..])
-    }
-
-    fn split_http_whitespaces(&self) -> Split<'_, [char; 2]> {
-        self.split(Self::HTTP_WHITESPACE)
     }
 }
 
