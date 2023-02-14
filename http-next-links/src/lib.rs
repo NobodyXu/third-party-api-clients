@@ -1,15 +1,7 @@
-use std::{error, fmt, iter, str::FromStr, vec::IntoIter as VecIntoIter};
+mod error;
+pub use error::Error;
 
-#[derive(Debug)]
-pub struct Error(&'static str);
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Invalid link segment: {}", self.0)
-    }
-}
-
-impl error::Error for Error {}
+use std::{iter, str::FromStr, vec::IntoIter as VecIntoIter};
 
 trait StrExt {
     const HTTP_WHITESPACE: [char; 2] = [' ', '\t'];
