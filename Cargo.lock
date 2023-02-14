@@ -779,9 +779,6 @@ dependencies = [
 [[package]]
 name = "http-next-links"
 version = "0.1.0"
-dependencies = [
- "anyhow",
-]
 
 [[package]]
 name = "httparse"
