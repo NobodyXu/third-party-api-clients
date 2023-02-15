@@ -6,6 +6,3 @@ description = "Parsing http header Link with rels=Next."
 documentation = "https://docs.rs/http-next-links/"
 repository = "https://github.com/oxidecomputer/third-party-api-clients/tree/main/http-next-links"
 license = "MIT"
-
-[dev-dependencies]
-test-case = "3"
