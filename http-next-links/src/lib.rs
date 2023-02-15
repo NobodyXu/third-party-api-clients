@@ -88,10 +88,16 @@ mod tests {
         },
     ];
 
-    const SIMPLE_CASES_FAILURE: &[CaseFailure] = &[CaseFailure {
-        input: r#"https://one.example.com>; rel="preconnect", <https://two.example.com>; rel="preconnect", <https://three.example.com>; rel="preconnect""#,
-        expected_err: Error::msg("Expected '<' for uri"),
-    }];
+    const SIMPLE_CASES_FAILURE: &[CaseFailure] = &[
+        CaseFailure {
+            input: r#"https://one.example.com>; rel="preconnect", <https://two.example.com>; rel="preconnect", <https://three.example.com>; rel="preconnect""#,
+            expected_err: Error::msg("Expected '<' for uri"),
+        },
+        CaseFailure {
+            input: r#"<https://one.example.com>, rel="preconnect"; <https://two.example.com>; rel="preconnect", <https://three.example.com>; rel="preconnect""#,
+            expected_err: Error::msg("Expected '<' for uri"),
+        },
+    ];
 
     #[test]
     fn test_simple_cases() {
