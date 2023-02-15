@@ -4,6 +4,9 @@ pub use error::Error;
 mod parser;
 use parser::parse_uri;
 
+mod utils;
+use utils::IterExt;
+
 use std::{iter::FromIterator, str::FromStr, vec::IntoIter as VecIntoIter};
 
 pub use url::Url;
@@ -38,14 +41,19 @@ impl FromStr for NextLinks {
         while !s.is_empty() {
             let (uri, mut params) = parse_uri(s)?;
 
-            let mut rels = None;
+            // Params rel can only occur once and the parser is required to ignore
+            // all but the first one.
+            let rels = params
+                .try_find_map(|(name, value)| "rel".eq_ignore_ascii_case(name).then_some(value))
+                .transpose()?;
 
-            while let Some((name, value)) = params.next().transpose()? {
-                // Params rel can only occur once and the parser is required to ignore
-                // all but the first one.
-                if "rel".eq_ignore_ascii_case(name) && rels.is_none() {
-                    rels = Some(value);
-                }
+            // Consume the iterator so that we can parse the next link uri
+            // and propagate errors.
+            //
+            // Since params impls FusedIterator, we can do this even if
+            // rels.is_none()
+            if let Some(err) = params.find_map(Result::err) {
+                return Err(err);
             }
 
             let is_next = rels
