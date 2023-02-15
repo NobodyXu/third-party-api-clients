@@ -74,7 +74,7 @@ mod tests {
 
     struct CaseFailure {
         input: &'static str,
-        expected_err: Error,
+        expected_err: fn() -> Error,
     }
 
     const SIMPLE_CASES_SUCCESS: &[CaseSuccess] = &[
@@ -91,11 +91,11 @@ mod tests {
     const SIMPLE_CASES_FAILURE: &[CaseFailure] = &[
         CaseFailure {
             input: r#"https://one.example.com>; rel="preconnect", <https://two.example.com>; rel="preconnect", <https://three.example.com>; rel="preconnect""#,
-            expected_err: Error::msg("Expected '<' for uri"),
+            expected_err: || Error::msg("Expected '<' for uri"),
         },
         CaseFailure {
             input: r#"<https://one.example.com>, rel="preconnect"; <https://two.example.com>; rel="preconnect", <https://three.example.com>; rel="preconnect""#,
-            expected_err: Error::msg("Expected '<' for uri"),
+            expected_err: || Error::msg("Expected '<' for uri"),
         },
     ];
 
@@ -126,7 +126,7 @@ mod tests {
              }| {
                 let err = NextLinks::from_str(input).unwrap_err();
 
-                assert_eq!(&err, expected_err);
+                assert_eq!(err, expected_err());
             },
         );
     }
