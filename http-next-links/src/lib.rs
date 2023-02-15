@@ -63,8 +63,56 @@ impl FromStr for NextLinks {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{FromStr, NextLinks};
+
+    struct CaseSuccess {
+        input: &'static str,
+        expected_output: &'static [&'static str],
+    }
+
+    struct CaseFailure {
+        input: &'static str,
+        expected_err: &'static str,
+    }
+
+    const SIMPLE_CASES_SUCCESS: &[CaseSuccess] = &[
+        CaseSuccess {
+            input: r#"<https://one.example.com>; rel="preconnect", <https://two.example.com>; rel="preconnect", <https://three.example.com>; rel="preconnect""#,
+            expected_output: &[],
+        },
+        CaseSuccess {
+            input: r#"<https://one.example.com>; rel="preconnect", <https://two.example.com>; rel="preconnect", <https://three.example.com>; rel="preconnect",    <https://link.example.com>; rel="next preconnect"; rel=preconnect a;    a=b"#,
+            expected_output: &["https://link.example.com"],
+        },
+    ];
+
+    const SIMPLE_CASES_FAILURE: &[CaseFailure] = &[CaseFailure {
+        input: r#"https://one.example.com>; rel="preconnect", <https://two.example.com>; rel="preconnect", <https://three.example.com>; rel="preconnect""#,
+        expected_err: "Expected '<' for uri",
+    }];
 
     #[test]
-    fn it_works() {}
+    fn test_simple_cases() {
+        SIMPLE_CASES_SUCCESS.iter().for_each(
+            |CaseSuccess {
+                 input,
+                 expected_output,
+             }| {
+                let actual_output: Vec<_> = NextLinks::from_str(input).unwrap().into();
+
+                assert_eq!(actual_output, *expected_output);
+            },
+        );
+
+        SIMPLE_CASES_FAILURE.iter().for_each(
+            |CaseFailure {
+                 input,
+                 expected_err,
+             }| {
+                let err = NextLinks::from_str(input).unwrap_err();
+
+                assert_eq!(err.0, *expected_err);
+            },
+        );
+    }
 }
