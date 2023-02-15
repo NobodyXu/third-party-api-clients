@@ -6,11 +6,13 @@ use parser::parse_uri;
 
 use std::{iter::FromIterator, str::FromStr, vec::IntoIter as VecIntoIter};
 
+pub use url::Url;
+
 /// All uri that contains rel "next".
 #[derive(Debug)]
-pub struct NextLinks(VecIntoIter<String>);
+pub struct NextLinks(VecIntoIter<Url>);
 
-impl From<NextLinks> for Vec<String> {
+impl From<NextLinks> for Vec<Url> {
     /// libstd contains specialisation for `VecIntoIter`, thus this conversion
     /// is O(1).
     fn from(next_links: NextLinks) -> Self {
@@ -19,7 +21,7 @@ impl From<NextLinks> for Vec<String> {
 }
 
 impl Iterator for NextLinks {
-    type Item = String;
+    type Item = Url;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next()
@@ -51,7 +53,7 @@ impl FromStr for NextLinks {
                 .unwrap_or(false);
 
             if is_next {
-                next_links.push(uri.to_string());
+                next_links.push(uri);
             }
 
             s = params.into_next_uri().unwrap();
@@ -63,7 +65,7 @@ impl FromStr for NextLinks {
 
 #[cfg(test)]
 mod tests {
-    use super::{Error, FromStr, NextLinks};
+    use super::{Error, FromStr, NextLinks, Url};
 
     struct CaseSuccess {
         input: &'static str,
@@ -100,7 +102,14 @@ mod tests {
              }| {
                 let actual_output: Vec<_> = NextLinks::from_str(input).unwrap().into();
 
-                assert_eq!(actual_output, *expected_output);
+                let expected_output: Vec<_> = expected_output
+                    .iter()
+                    .copied()
+                    .map(Url::parse)
+                    .collect::<Result<Vec<_>, _>>()
+                    .unwrap();
+
+                assert_eq!(actual_output, expected_output);
             },
         );
 

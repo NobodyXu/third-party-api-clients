@@ -1,6 +1,6 @@
 use std::iter;
 
-use crate::Error;
+use crate::{Error, Url};
 
 trait StrExt {
     const HTTP_WHITESPACE: [char; 2] = [' ', '\t'];
@@ -103,7 +103,7 @@ impl<'a> Iterator for ParamsIter<'a> {
 /// Return (uri, params iterator).
 ///
 /// Precondition: `s` must not be empty.
-pub(super) fn parse_uri(s: &str) -> Result<(&str, ParamsIter<'_>), Error> {
+pub(super) fn parse_uri(s: &str) -> Result<(Url, ParamsIter<'_>), Error> {
     let s = s
         .trim_start_http_whitespaces()
         .strip_prefix('<')
@@ -112,6 +112,8 @@ pub(super) fn parse_uri(s: &str) -> Result<(&str, ParamsIter<'_>), Error> {
     let (uri, rest) = s
         .split_once('>')
         .ok_or(Error::msg("Expected '>' for uri"))?;
+
+    let uri: Url = uri.parse().map_err(Error::url_parse_err)?;
 
     Ok((uri, ParamsIter::new(rest)?))
 }
