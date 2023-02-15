@@ -4,10 +4,19 @@ pub use error::Error;
 mod parser;
 use parser::parse_uri;
 
-use std::{str::FromStr, vec::IntoIter as VecIntoIter};
+use std::{iter::FromIterator, str::FromStr, vec::IntoIter as VecIntoIter};
 
+/// All uri that contains rel "next".
 #[derive(Debug)]
 pub struct NextLinks(VecIntoIter<String>);
+
+impl From<NextLinks> for Vec<String> {
+    /// libstd contains specialisation for `VecIntoIter`, thus this conversion
+    /// is O(1).
+    fn from(next_links: NextLinks) -> Self {
+        Self::from_iter(next_links.0)
+    }
+}
 
 impl Iterator for NextLinks {
     type Item = String;
@@ -20,6 +29,7 @@ impl Iterator for NextLinks {
 impl FromStr for NextLinks {
     type Err = Error;
 
+    /// Parses all uri that contains rel "next".
     fn from_str(mut s: &str) -> Result<Self, Self::Err> {
         let mut next_links = Vec::new();
 
