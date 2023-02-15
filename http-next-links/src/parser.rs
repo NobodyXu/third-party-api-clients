@@ -36,7 +36,7 @@ impl<'a> ParamsIter<'a> {
         } else if rest.is_empty() {
             Ok(ParamsIter::NextUri(rest))
         } else {
-            Err(Error(
+            Err(Error::msg(
                 "Expected either ';' for next param, ',' for next uri or an empty string for termination",
             ))
         }
@@ -61,7 +61,7 @@ impl<'a> Iterator for ParamsIter<'a> {
         let ParamsIter::Params(params) = *self else { return None };
 
         let mut f = || -> Result<_, Error> {
-            let (name, rest) = params.split_once('=').ok_or(Error("Expected param"))?;
+            let (name, rest) = params.split_once('=').ok_or(Error::msg("Expected param"))?;
 
             let name = name.trim_end_http_whitespaces();
 
@@ -70,7 +70,7 @@ impl<'a> Iterator for ParamsIter<'a> {
                 // Parse quoted value
                 let (value, rest) = rest
                     .split_once('"')
-                    .ok_or(Error("Unclosed '\"' in param value"))?;
+                    .ok_or(Error::msg("Unclosed '\"' in param value"))?;
 
                 *self = Self::new(rest)?;
 
@@ -107,9 +107,11 @@ pub(super) fn parse_uri(s: &str) -> Result<(&str, ParamsIter<'_>), Error> {
     let s = s
         .trim_start_http_whitespaces()
         .strip_prefix('<')
-        .ok_or(Error("Expected '<' for uri"))?;
+        .ok_or(Error::msg("Expected '<' for uri"))?;
 
-    let (uri, rest) = s.split_once('>').ok_or(Error("Expected '>' for uri"))?;
+    let (uri, rest) = s
+        .split_once('>')
+        .ok_or(Error::msg("Expected '>' for uri"))?;
 
     Ok((uri, ParamsIter::new(rest)?))
 }
