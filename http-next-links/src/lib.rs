@@ -97,6 +97,10 @@ mod tests {
             input: r#"<https://one.example.com>, rel="preconnect"; <https://two.example.com>; rel="preconnect", <https://three.example.com>; rel="preconnect""#,
             expected_err: || Error::msg("Expected '<' for uri"),
         },
+        CaseFailure {
+            input: r#"<;,>; rel="preconnect", <https://two.example.com>; rel="preconnect", <https://three.example.com>; rel="preconnect""#,
+            expected_err: || Error::url_parse_err(Url::parse(";,").unwrap_err()),
+        },
     ];
 
     #[test]
