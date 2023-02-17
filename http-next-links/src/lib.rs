@@ -94,6 +94,10 @@ mod tests {
             input: r#"<https://one.example.com>; rel="preconnect", <https://two.example.com>; rel="preconnect", <https://three.example.com>; rel="preconnect",    <https://link.example.com>; rel="next preconnect"; rel=preconnect a;    a=b"#,
             expected_output: &["https://link.example.com"],
         },
+        CaseSuccess {
+            input: r#"<https://one.example.com>; rel="preconnect", <https://two.example.com>; rel="preconnect", <https://three.example.com>; rel="preconnect",    <https://link.example.com>; rel="next preconnect"; rel=preconnect a;    a=b, <https://link2.example.com>; rel=next  a wecx; rel="a    ed s"; a=v"#,
+            expected_output: &["https://link.example.com", "https://link2.example.com"],
+        },
     ];
 
     const SIMPLE_CASES_FAILURE: &[CaseFailure] = &[
@@ -106,8 +110,26 @@ mod tests {
             expected_err: || Error::msg("Expected '<' for uri"),
         },
         CaseFailure {
+            input: r#"<https://one.example.com, rel="preconnect"; <https://two.example.com; rel="preconnect", <https://three.example.com; rel="preconnect""#,
+            expected_err: || Error::msg("Expected '>' for uri"),
+        },
+        CaseFailure {
             input: r#"<;,>; rel="preconnect", <https://two.example.com>; rel="preconnect", <https://three.example.com>; rel="preconnect""#,
             expected_err: || Error::url_parse_err(Url::parse(";,").unwrap_err()),
+        },
+        CaseFailure {
+            input: r#"<https://one.example.com>; a"#,
+            expected_err: || Error::msg("Expected param"),
+        },
+        CaseFailure {
+            input: r#"<https://one.example.com>; rel="preconnect, <https://two.example.com>; rel=preconnect, <https://three.example.com>"#,
+            expected_err: || Error::msg("Unclosed '\"' in param value"),
+        },
+        CaseFailure {
+            input: r#"<https://one.example.com> bbbb"#,
+            expected_err: || {
+                Error::msg("Expected either ';' for next param, ',' for next uri or an empty string for termination")
+            },
         },
     ];
 
