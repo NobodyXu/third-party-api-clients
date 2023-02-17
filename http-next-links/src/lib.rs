@@ -160,7 +160,7 @@ mod tests {
              }| {
                 let err = NextLinks::from_str(input).unwrap_err();
 
-                assert_eq!(err, expected_err());
+                assert_eq!(err.0, expected_err().0);
             },
         );
     }

@@ -3,7 +3,7 @@ use std::{error, fmt};
 use url::ParseError;
 
 #[derive(Debug, Eq, PartialEq)]
-enum Inner {
+pub(super) enum Inner {
     Msg(&'static str),
     UrlParseError(ParseError),
 }
@@ -17,8 +17,8 @@ impl fmt::Display for Inner {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub struct Error(Inner);
+#[derive(Debug)]
+pub struct Error(pub(super) Inner);
 
 impl Error {
     pub(super) const fn msg(msg: &'static str) -> Self {
